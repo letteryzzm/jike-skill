@@ -1,0 +1,11 @@
+{
+  "name": "jike",
+  "description": "Jike (即刻) social network client — QR login, feed, posts, comments, search, notifications",
+  "version": "0.1.0",
+  "author": {
+    "name": "Claude Opus 4.5",
+    "email": "noreply@anthropic.com"
+  },
+  "license": "MIT",
+  "keywords": ["jike", "即刻", "social", "ai-agent", "claude-skill"]
+}

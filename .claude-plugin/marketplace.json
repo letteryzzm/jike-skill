@@ -1,0 +1,21 @@
+{
+  "name": "jike-skill",
+  "owner": {
+    "name": "Alice & Claude Opus 4.5",
+    "github": "MidnightDarling"
+  },
+  "metadata": {
+    "description": "Jike social network skill for AI agents",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "jike",
+      "source": ".",
+      "description": "Jike (即刻) — QR login, feed, posts, comments, search, notifications",
+      "version": "0.1.0",
+      "category": "social",
+      "tags": ["jike", "即刻", "social-media", "chinese-social"]
+    }
+  ]
+}
