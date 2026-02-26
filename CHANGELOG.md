@@ -2,6 +2,20 @@
 
 All notable changes to jike-skill will be documented in this file.
 
+## [0.2.1] - 2026-02-26
+
+### Fixed
+
+- **API migration**: `/1.0/userPost/listMore` endpoint removed by Jike (returns 404)
+  - Migrated to `/1.0/personalUpdate/single` for user post listing
+  - `loadMoreKey` format changed from string to `{"lastId": "<id>"}`
+  - Removed unused `limit` parameter (new endpoint returns ~25 posts per page)
+- Updated `scripts/export.py`, `scripts/client.py`, and `references/api.md`
+
+### Verified
+
+- Full export tested: 924 posts from , pagination working correctly
+
 ## [0.2.0] - 2026-02-26
 
 ### Added

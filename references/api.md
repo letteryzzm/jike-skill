@@ -154,27 +154,30 @@ Body: {
 ### List User Posts (Paginated)
 
 ```
-POST /1.0/userPost/listMore
+POST /1.0/personalUpdate/single
 Body: {
   "username": "<username>",
-  "limit": 20,
-  "loadMoreKey": "<optional, from previous response>"
+  "loadMoreKey": { "lastId": "<post_id>" }  // optional, from previous response
 }
 ```
 
 Response:
 ```json
 {
+  "success": true,
   "data": [ { "id": "...", "type": "ORIGINAL_POST", "content": "...", "createdAt": "...", "pictures": [...], "topic": {...}, "linkInfo": {...}, "target": {...} }, ... ],
-  "loadMoreKey": "<next_page_key_or_null>"
+  "loadMoreKey": { "lastId": "<next_page_cursor>" }
 }
 ```
 
 Notes:
+- Returns ~25 posts per page (server-controlled, no `limit` param)
 - `loadMoreKey` is `null` or absent when no more posts exist
+- `loadMoreKey` is an object `{"lastId": "..."}`, not a string
 - `type` is `ORIGINAL_POST` or `REPOST`
 - `target` field is present only for reposts, containing the original post
 - `pictures` is an array of objects with `picUrl`, `middlePicUrl`, `thumbnailUrl`
+- **Deprecated**: `/1.0/userPost/listMore` — returns 404 as of Feb 2026
 
 ---
 

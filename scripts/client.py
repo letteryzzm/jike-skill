@@ -88,11 +88,11 @@ def profile(at: str, rt: str, username: str) -> dict:
     return _call("GET", f"/1.0/users/profile?username={username}", at, rt)
 
 
-def user_posts(at: str, rt: str, username: str, limit: int = 20, load_more_key: Optional[str] = None) -> dict:
-    body: dict = {"username": username, "limit": limit}
+def user_posts(at: str, rt: str, username: str, load_more_key: Optional[dict] = None) -> dict:
+    body: dict = {"username": username}
     if load_more_key:
         body["loadMoreKey"] = load_more_key
-    return _call("POST", "/1.0/userPost/listMore", at, rt, json=body)
+    return _call("POST", "/1.0/personalUpdate/single", at, rt, json=body)
 
 
 def notifications(at: str, rt: str) -> dict:
@@ -117,7 +117,7 @@ def main():
     sub.add_parser("delete-comment").add_argument("--comment-id", required=True)
     sp = sub.add_parser("search"); sp.add_argument("--keyword", required=True); sp.add_argument("--limit", type=int, default=20)
     sub.add_parser("profile").add_argument("--username", required=True)
-    sp = sub.add_parser("user-posts"); sp.add_argument("--username", required=True); sp.add_argument("--limit", type=int, default=20)
+    sub.add_parser("user-posts").add_argument("--username", required=True)
     sub.add_parser("notifications")
 
     args = p.parse_args()
@@ -131,7 +131,7 @@ def main():
         "delete-comment": lambda: delete_comment(at, rt, args.comment_id),
         "search": lambda: search(at, rt, args.keyword, args.limit),
         "profile": lambda: profile(at, rt, args.username),
-        "user-posts": lambda: user_posts(at, rt, args.username, args.limit),
+        "user-posts": lambda: user_posts(at, rt, args.username),
         "notifications": lambda: notifications(at, rt),
     }
 

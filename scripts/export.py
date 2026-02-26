@@ -102,13 +102,12 @@ def fetch_user_posts(
     username: str,
     at: str,
     rt: str,
-    limit: int = PAGE_SIZE,
-    load_more_key: Optional[str] = None,
+    load_more_key: Optional[dict] = None,
 ) -> tuple[dict, str, str]:
-    body: dict = {"username": username, "limit": limit}
+    body: dict = {"username": username}
     if load_more_key:
         body["loadMoreKey"] = load_more_key
-    return _api_call("POST", "/1.0/userPost/listMore", at, rt, json=body)
+    return _api_call("POST", "/1.0/personalUpdate/single", at, rt, json=body)
 
 
 def fetch_all_posts(
@@ -124,7 +123,7 @@ def fetch_all_posts(
         print(f"  Fetching page {page}...", file=sys.stderr, end="", flush=True)
 
         data, at, rt = fetch_user_posts(
-            username, at, rt, limit=PAGE_SIZE, load_more_key=load_more_key
+            username, at, rt, load_more_key=load_more_key
         )
 
         posts = data.get("data", [])
