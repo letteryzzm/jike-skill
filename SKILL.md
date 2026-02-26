@@ -64,12 +64,39 @@ python3 scripts/client.py profile --username "someone" --access-token TOKEN --re
 | `delete-comment` | Remove comment | `--comment-id` |
 | `search` | Search content | `--keyword`, `--limit` |
 | `profile` | User profile | `--username` |
+| `user-posts` | List user's posts | `--username`, `--limit` |
 | `notifications` | Unread + list | — |
+
+### 3. Export All Posts
+
+Run `scripts/export.py` to export a user's entire post history to Markdown:
+
+```bash
+python3 scripts/export.py --username USERNAME \
+  --access-token TOKEN --refresh-token TOKEN \
+  --output posts.md --download-images --json-dump
+```
+
+| Flag | Description |
+|------|-------------|
+| `--username` | Jike username to export |
+| `--output` | Output file (default: `<username>_jike_export.md`) |
+| `--download-images` | Download images locally |
+| `--images-dir` | Custom directory for images |
+| `--json-dump` | Also save raw JSON alongside Markdown |
+
+The export automatically:
+- Paginates through all posts (rate-limited)
+- Preserves images (inline URLs or downloaded)
+- Includes repost/share content with original author
+- Sorts chronologically (oldest first)
+- Includes topic tags and link attachments
 
 ## Bundled Resources
 
 - **scripts/auth.py** — Standalone QR auth, no pip install needed
 - **scripts/client.py** — Standalone API client, no pip install needed
+- **scripts/export.py** — Full post history export to Markdown
 - **references/api.md** — Complete API endpoint reference (read when needed)
 
 ## API Reference

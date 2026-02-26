@@ -149,6 +149,35 @@ Body: {
 
 ---
 
+## User Posts
+
+### List User Posts (Paginated)
+
+```
+POST /1.0/userPost/listMore
+Body: {
+  "username": "<username>",
+  "limit": 20,
+  "loadMoreKey": "<optional, from previous response>"
+}
+```
+
+Response:
+```json
+{
+  "data": [ { "id": "...", "type": "ORIGINAL_POST", "content": "...", "createdAt": "...", "pictures": [...], "topic": {...}, "linkInfo": {...}, "target": {...} }, ... ],
+  "loadMoreKey": "<next_page_key_or_null>"
+}
+```
+
+Notes:
+- `loadMoreKey` is `null` or absent when no more posts exist
+- `type` is `ORIGINAL_POST` or `REPOST`
+- `target` field is present only for reposts, containing the original post
+- `pictures` is an array of objects with `picUrl`, `middlePicUrl`, `thumbnailUrl`
+
+---
+
 ## Users
 
 ### User Profile

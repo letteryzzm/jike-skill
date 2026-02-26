@@ -75,7 +75,30 @@ Read https://github.com/MidnightDarling/jike-skill/blob/main/SKILL.md
 | `jike delete-comment` | Delete a comment | 删评论 |
 | `jike search` | Search content | 搜索 |
 | `jike profile` | User profile | 用户资料 |
+| `jike user-posts` | List a user's posts | 用户帖子列表 |
 | `jike notifications` | Check notifications | 查看通知 |
+
+## Export All Posts / 导出全部帖子
+
+```bash
+# Export to Markdown (with image URLs inline)
+# 导出为 Markdown（图片以 URL 内联）
+python3 scripts/export.py --username YOUR_USERNAME \
+  --access-token TOKEN --refresh-token TOKEN
+
+# Export with local images + raw JSON backup
+# 导出并下载图片 + JSON 原始数据备份
+python3 scripts/export.py --username YOUR_USERNAME \
+  --access-token TOKEN --refresh-token TOKEN \
+  --output my_posts.md --download-images --json-dump
+```
+
+Features / 功能:
+- Paginates through ALL posts automatically / 自动翻页获取全部帖子
+- Includes images (URLs or downloaded) / 包含图片
+- Preserves reposts with original author / 保留转发内容和原作者
+- Chronological order / 按时间排序
+- Topic tags and links / 包含话题标签和链接
 
 ## How Auth Works / 认证原理
 

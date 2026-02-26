@@ -126,6 +126,16 @@ class JikeClient:
             body["loadMoreKey"] = load_more_key
         return self._request("POST", "/1.0/search/integrate", json=body)
 
+    # ── User Posts ──────────────────────────────────────────
+
+    def user_posts(
+        self, username: str, limit: int = 20, load_more_key: Optional[str] = None
+    ) -> dict:
+        body: dict[str, object] = {"username": username, "limit": limit}
+        if load_more_key:
+            body["loadMoreKey"] = load_more_key
+        return self._request("POST", "/1.0/userPost/listMore", json=body)
+
     # ── Users ─────────────────────────────────────────────
 
     def profile(self, username: str) -> dict:
@@ -194,6 +204,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("profile")
     p.add_argument("--username", required=True)
 
+    p = sub.add_parser("user-posts")
+    p.add_argument("--username", required=True)
+    p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--load-more-key")
+
     sub.add_parser("notifications")
 
     return parser
@@ -207,6 +222,7 @@ _DISPATCH = {
     "delete-comment": lambda c, a: c.delete_comment(a.comment_id),
     "search": lambda c, a: c.search(a.keyword, a.limit),
     "profile": lambda c, a: c.profile(a.username),
+    "user-posts": lambda c, a: c.user_posts(a.username, a.limit, getattr(a, "load_more_key", None)),
     "notifications": lambda c, _: {
         "unread": c.unread_notifications(),
         "list": c.list_notifications(),
