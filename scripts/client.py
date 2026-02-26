@@ -69,15 +69,15 @@ def delete_post(at: str, rt: str, post_id: str) -> dict:
     return _call("POST", "/1.0/originalPosts/remove", at, rt, json={"id": post_id})
 
 
-def add_comment(at: str, rt: str, post_id: str, content: str) -> dict:
+def add_comment(at: str, rt: str, post_id: str, content: str, target_type: str = "ORIGINAL_POST") -> dict:
     return _call("POST", "/1.0/comments/add", at, rt, json={
-        "targetType": "ORIGINAL_POST", "targetId": post_id,
+        "targetType": target_type, "targetId": post_id,
         "content": content, "syncToPersonalUpdates": False, "pictureKeys": [], "force": False,
     })
 
 
-def delete_comment(at: str, rt: str, comment_id: str) -> dict:
-    return _call("POST", "/1.0/comments/remove", at, rt, json={"id": comment_id, "targetType": "ORIGINAL_POST"})
+def delete_comment(at: str, rt: str, comment_id: str, target_type: str = "ORIGINAL_POST") -> dict:
+    return _call("POST", "/1.0/comments/remove", at, rt, json={"id": comment_id, "targetType": target_type})
 
 
 def search(at: str, rt: str, keyword: str, limit: int = 20) -> dict:
@@ -113,8 +113,8 @@ def main():
     sub.add_parser("feed").add_argument("--limit", type=int, default=20)
     sp = sub.add_parser("post"); sp.add_argument("--content", required=True)
     sub.add_parser("delete-post").add_argument("--post-id", required=True)
-    sp = sub.add_parser("comment"); sp.add_argument("--post-id", required=True); sp.add_argument("--content", required=True)
-    sub.add_parser("delete-comment").add_argument("--comment-id", required=True)
+    sp = sub.add_parser("comment"); sp.add_argument("--post-id", required=True); sp.add_argument("--content", required=True); sp.add_argument("--target-type", default="ORIGINAL_POST", choices=["ORIGINAL_POST", "REPOST"])
+    sp = sub.add_parser("delete-comment"); sp.add_argument("--comment-id", required=True); sp.add_argument("--target-type", default="ORIGINAL_POST", choices=["ORIGINAL_POST", "REPOST"])
     sp = sub.add_parser("search"); sp.add_argument("--keyword", required=True); sp.add_argument("--limit", type=int, default=20)
     sub.add_parser("profile").add_argument("--username", required=True)
     sub.add_parser("user-posts").add_argument("--username", required=True)
@@ -127,8 +127,8 @@ def main():
         "feed": lambda: feed(at, rt, args.limit),
         "post": lambda: create_post(at, rt, args.content),
         "delete-post": lambda: delete_post(at, rt, args.post_id),
-        "comment": lambda: add_comment(at, rt, args.post_id, args.content),
-        "delete-comment": lambda: delete_comment(at, rt, args.comment_id),
+        "comment": lambda: add_comment(at, rt, args.post_id, args.content, args.target_type),
+        "delete-comment": lambda: delete_comment(at, rt, args.comment_id, args.target_type),
         "search": lambda: search(at, rt, args.keyword, args.limit),
         "profile": lambda: profile(at, rt, args.username),
         "user-posts": lambda: user_posts(at, rt, args.username),
