@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jike-skill"
-version = "0.1.0"
-description = "Jike (即刻) client for humans and AI agents — QR login, feed, posts, comments, search"
+version = "0.2.0"
+description = "Jike (即刻) client for humans and AI agents — QR login, feed, posts, comments, search, export"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -32,7 +32,7 @@ jike-auth = "jike.auth:main"
 jike-api = "jike.client:main"
 
 [project.urls]
-Repository = "https://github.com/OWNER/jike-skill"
+Repository = "https://github.com/MidnightDarling/jike-skill"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/jike"]

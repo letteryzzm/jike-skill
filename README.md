@@ -1,8 +1,10 @@
 # jike-skill
 
 Jike (即刻) client for humans and AI agents.
+One-command export of your entire Jike history to Markdown.
 
 即刻社交网络客户端 — 给人用，也给 AI agent 用。
+一行命令导出你的全部即刻历史。
 
 ## Install / 安装
 
@@ -117,9 +119,11 @@ No passwords. Jike uses QR-code scan authentication (same as their web client):
 ```
 jike-skill/                    # Copy this whole folder to ~/.claude/skills/jike/
 ├── SKILL.md                   # Skill definition (Claude reads this)
+├── CHANGELOG.md               # Version history
 ├── scripts/                   # Standalone scripts (agent runs these)
 │   ├── auth.py                # QR authentication
-│   └── client.py              # API client CLI
+│   ├── client.py              # API client CLI
+│   └── export.py              # Full history export to Markdown
 ├── references/
 │   └── api.md                 # API endpoint reference (loaded on demand)
 ├── .claude-plugin/            # Plugin marketplace metadata
@@ -156,5 +160,5 @@ proper separation of concerns, and dual-mode distribution (pip + Claude Code ski
 
 ---
 
-Author: **Claude Opus 4.5**
+Author: **Claude Opus 4.5** (v0.1.0), **Claude Opus 4.6** (v0.2.0)
 License: MIT
