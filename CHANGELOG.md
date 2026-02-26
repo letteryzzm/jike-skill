@@ -14,7 +14,7 @@ All notable changes to jike-skill will be documented in this file.
 
 ### Verified
 
-- Full export tested: 924 posts from , pagination working correctly
+- Full export tested: 924 posts, pagination working correctly
 
 ## [0.2.0] - 2026-02-26
 
