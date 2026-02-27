@@ -92,6 +92,42 @@ The export automatically:
 - Sorts chronologically (oldest first)
 - Includes topic tags and link attachments
 
+### 4. Analyze User Posts
+
+Fetch all posts for a user and analyze them per the user's request.
+
+**Step 1 — Parse username**
+
+Accept either a username or a profile URL:
+- Direct username: `someone`
+- URL formats: `https://okjike.com/u/someone` or `https://www.okjike.com/u/someone`
+
+Extract username with: `re.search(r'/u/([^/?#]+)', url).group(1)`
+
+**Step 2 — Export posts to a temp file**
+
+```bash
+python3 scripts/export.py --username USERNAME \
+  --access-token TOKEN --refresh-token TOKEN \
+  --output /tmp/jike_USERNAME.md
+```
+
+**Step 3 — Read and analyze**
+
+Read `/tmp/jike_USERNAME.md`, then analyze according to the user's request. Each post in the file has timestamp, content, topic tag, repost info, and post ID.
+
+**Example analysis requests**:
+- 兴趣偏好 / content themes
+- 写作风格 / writing style
+- 高频话题 / most frequent topics
+- 时间分布 / posting patterns over time
+- 转发偏好 / what they repost and why
+- 对比分析 / compare two users
+
+If the user doesn't specify what to analyze, default to: themes, style, notable posts, and a brief persona summary.
+
+**Trigger phrases**: "分析 @xxx", "分析一下 xxx 的帖子", "看看 xxx 都发什么", "帮我了解一下 xxx", profile URL pasted in chat.
+
 ## Bundled Resources
 
 - **scripts/auth.py** — Standalone QR auth, no pip install needed
