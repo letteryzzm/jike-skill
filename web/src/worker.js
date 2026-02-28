@@ -385,7 +385,7 @@ tr:hover td{background:#fafafa}
       </div>
       <span class="text-white font-bold tracking-tight">即刻人才雷达</span>
     </div>
-    <button onclick="toggleCfg()" class="text-gray-400 hover:text-yellow-400 text-sm transition-colors flex items-center gap-1.5">
+    <button id="cfg-btn" class="text-gray-400 hover:text-yellow-400 text-sm transition-colors flex items-center gap-1.5">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
       设置
     </button>
@@ -409,7 +409,7 @@ tr:hover td{background:#fafafa}
     </div>
   </div>
   <div class="max-w-6xl mx-auto px-4 pb-4 flex items-center gap-3">
-    <button onclick="saveCfg()" class="bg-yellow-400 hover:bg-yellow-300 text-black text-sm font-semibold px-5 py-1.5 rounded-lg transition-colors">保存到本地</button>
+    <button id="cfg-save-btn" class="bg-yellow-400 hover:bg-yellow-300 text-black text-sm font-semibold px-5 py-1.5 rounded-lg transition-colors">保存到本地</button>
     <span id="cfg-saved" class="text-green-400 text-sm hidden">✓ 已保存</span>
     <span class="text-gray-600 text-xs">Token 仅存储在浏览器 localStorage，不上传服务器</span>
   </div>
@@ -419,8 +419,8 @@ tr:hover td{background:#fafafa}
 <main class="max-w-6xl mx-auto px-4 py-6">
   <!-- Tabs -->
   <div class="flex gap-2 mb-6">
-    <button id="tab-s" onclick="tab('s')" class="px-5 py-2 rounded-full text-sm font-semibold bg-black text-white transition-all">🔍 人才搜索</button>
-    <button id="tab-a" onclick="tab('a')" class="px-5 py-2 rounded-full text-sm font-semibold bg-white text-gray-500 hover:bg-gray-50 transition-all">📊 用户分析</button>
+    <button id="tab-s" class="px-5 py-2 rounded-full text-sm font-semibold bg-black text-white transition-all">🔍 人才搜索</button>
+    <button id="tab-a" class="px-5 py-2 rounded-full text-sm font-semibold bg-white text-gray-500 hover:bg-gray-50 transition-all">📊 用户分析</button>
   </div>
 
   <!-- ── Search Panel ── -->
@@ -445,7 +445,7 @@ tr:hover td{background:#fafafa}
         <label class="text-sm font-semibold text-gray-700 block mb-1.5">筛选条件 <span class="text-gray-400 font-normal text-xs">（Claude 根据此条件打分筛选）</span></label>
         <textarea id="s-criteria" rows="3" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-400 resize-none transition-colors" placeholder="描述你想找的人...">技术型创业者：有技术深度（具体技术栈/开源项目/竞赛成绩），有产品执行力（已发布产品/真实用户数据/变现记录），顶校或大厂背景优先</textarea>
       </div>
-      <button onclick="doSearch()" id="s-btn" class="bg-yellow-400 hover:bg-yellow-300 text-black font-semibold px-8 py-2.5 rounded-xl text-sm transition-colors flex items-center gap-2">
+      <button id="s-btn" class="bg-yellow-400 hover:bg-yellow-300 text-black font-semibold px-8 py-2.5 rounded-xl text-sm transition-colors flex items-center gap-2">
         <span>开始搜索</span>
       </button>
     </div>
@@ -460,7 +460,7 @@ tr:hover td{background:#fafafa}
     <div id="s-results" class="hidden">
       <div class="flex items-center justify-between mb-3">
         <p id="s-count" class="text-sm text-gray-500"></p>
-        <button onclick="exportCSV()" class="text-sm text-blue-600 hover:underline flex items-center gap-1">↓ 导出 CSV</button>
+        <button id="export-btn" class="text-sm text-blue-600 hover:underline flex items-center gap-1">↓ 导出 CSV</button>
       </div>
       <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
@@ -503,7 +503,7 @@ tr:hover td{background:#fafafa}
         <label class="text-sm font-semibold text-gray-700 block mb-1.5">分析维度 <span class="text-gray-400 font-normal text-xs">（留空则全维度分析）</span></label>
         <textarea id="a-question" rows="2" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-400 resize-none transition-colors" placeholder="例：分析他的技术栈偏好和产品方向；或：找出他最有洞察力的3个观点并分析..."></textarea>
       </div>
-      <button onclick="doAnalyze()" id="a-btn" class="bg-yellow-400 hover:bg-yellow-300 text-black font-semibold px-8 py-2.5 rounded-xl text-sm transition-colors">
+      <button id="a-btn" class="bg-yellow-400 hover:bg-yellow-300 text-black font-semibold px-8 py-2.5 rounded-xl text-sm transition-colors">
         开始分析
       </button>
     </div>
@@ -733,6 +733,13 @@ function esc(s) {
 }
 
 loadCfg();
+document.getElementById('cfg-btn').addEventListener('click', toggleCfg);
+document.getElementById('cfg-save-btn').addEventListener('click', saveCfg);
+document.getElementById('tab-s').addEventListener('click', function() { tab('s'); });
+document.getElementById('tab-a').addEventListener('click', function() { tab('a'); });
+document.getElementById('s-btn').addEventListener('click', doSearch);
+document.getElementById('export-btn').addEventListener('click', exportCSV);
+document.getElementById('a-btn').addEventListener('click', doAnalyze);
 <\/script>
 </body>
 </html>`;
