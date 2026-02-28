@@ -646,12 +646,12 @@ function exportCSV() {
   const hdr = ['显示名','用户名','主页链接','Bio','推荐理由','联系方式','年龄','来源关键词'];
   const rows = searchData.map(u => [
     u.screenName, u.username, u.profileUrl,
-    u.bio.replace(/[\n\r,]/g,' '), (u.reason||'').replace(/,/g,'，'),
+    u.bio.split(',').join('，'), (u.reason||'').split(',').join('，'),
     u.contact||'', u.age||'', (u.foundVia||[]).join('|'),
   ]);
-  const csv = [hdr,...rows].map(r => r.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\\n');
+  const csv = [hdr,...rows].map(r => r.map(c => '"'+String(c).split('"').join('""')+'"').join(',')).join('\n');
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['\\ufeff'+csv], {type:'text/csv;charset=utf-8'}));
+  a.href = URL.createObjectURL(new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'}));
   a.download = 'jike_users_' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
 }
@@ -729,7 +729,9 @@ async function doAnalyze() {
 }
 
 function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
 }
 
 loadCfg();
