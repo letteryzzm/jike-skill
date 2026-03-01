@@ -14,25 +14,48 @@ function jikeHeaders(at) {
   return { ...JIKE_HEADERS, 'x-jike-access-token': at };
 }
 
-async function jikeFetch(method, path, at, body) {
-  const resp = await fetch(`${JIKE_API}${path}`, {
+async function refreshJikeToken(rt) {
+  const resp = await fetch(`${JIKE_API}/app_auth_tokens.refresh`, {
+    method: 'POST',
+    headers: { ...JIKE_HEADERS, 'x-jike-refresh-token': rt },
+  });
+  if (!resp.ok) throw new Error('Token 刷新失败，请重新登录');
+  return {
+    access_token: resp.headers.get('x-jike-access-token'),
+    refresh_token: resp.headers.get('x-jike-refresh-token') || rt,
+  };
+}
+
+async function jikeFetch(method, path, ctx, body) {
+  let resp = await fetch(`${JIKE_API}${path}`, {
     method,
-    headers: jikeHeaders(at),
+    headers: jikeHeaders(ctx.at),
     body: body ? JSON.stringify(body) : undefined,
   });
+  if (resp.status === 401 && ctx.rt) {
+    const newTokens = await refreshJikeToken(ctx.rt);
+    ctx.at = newTokens.access_token;
+    ctx.rt = newTokens.refresh_token;
+    ctx.refreshed = true;
+    resp = await fetch(`${JIKE_API}${path}`, {
+      method,
+      headers: jikeHeaders(ctx.at),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
   if (resp.status === 401) throw new Error('TOKEN_EXPIRED');
   if (!resp.ok) throw new Error(`Jike ${resp.status}: ${path}`);
   return resp.json();
 }
 
-async function searchKeyword(keyword, at, pages = 2) {
+async function searchKeyword(keyword, ctx, pages = 2) {
   const posts = [];
   let loadMoreKey = null;
   for (let i = 0; i < pages; i++) {
     const body = { keyword, limit: 20 };
     if (loadMoreKey) body.loadMoreKey = loadMoreKey;
     try {
-      const data = await jikeFetch('POST', '/1.0/search/integrate', at, body);
+      const data = await jikeFetch('POST', '/1.0/search/integrate', ctx, body);
       posts.push(...(data.data || []));
       loadMoreKey = data.loadMoreKey;
       if (!loadMoreKey) break;
@@ -57,9 +80,9 @@ function extractUsersFromPosts(posts) {
   return users;
 }
 
-async function fetchProfile(username, at) {
+async function fetchProfile(username, ctx) {
   try {
-    const data = await jikeFetch('GET', `/1.0/users/profile?username=${encodeURIComponent(username)}`, at);
+    const data = await jikeFetch('GET', `/1.0/users/profile?username=${encodeURIComponent(username)}`, ctx);
     const u = data.user || data;
     return {
       username,
@@ -73,14 +96,14 @@ async function fetchProfile(username, at) {
   }
 }
 
-async function fetchPosts(username, at, limit = 50) {
+async function fetchPosts(username, ctx, limit = 50) {
   const posts = [];
   let loadMoreKey = null;
   while (posts.length < limit) {
     const body = { username };
     if (loadMoreKey) body.loadMoreKey = loadMoreKey;
     try {
-      const data = await jikeFetch('POST', '/1.0/personalUpdate/single', at, body);
+      const data = await jikeFetch('POST', '/1.0/personalUpdate/single', ctx, body);
       const page = data.data || [];
       posts.push(...page);
       loadMoreKey = data.loadMoreKey;
@@ -134,36 +157,90 @@ function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// ── Claude ────────────────────────────────────────────────────────────────────
+// ── Gemini ────────────────────────────────────────────────────────────────────
 
-async function claudeChat(ak, prompt, stream = false) {
-  return fetch('https://api.anthropic.com/v1/messages', {
+async function geminiChat(apiKey, prompt, stream = false) {
+  const model = 'gemini-3-flash-preview';
+  const base = `https://generativelanguage.googleapis.com/v1beta/models/${model}`;
+  const url = stream
+    ? `${base}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`
+    : `${base}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  return fetch(url, {
     method: 'POST',
-    headers: {
-      'x-api-key': ak,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-opus-4-6',
-      max_tokens: 4096,
-      stream,
-      messages: [{ role: 'user', content: prompt }],
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
     }),
   });
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+async function handleAuthCreate() {
+  const resp = await fetch(`${JIKE_API}/sessions.create`, {
+    method: 'POST',
+    headers: { ...JIKE_HEADERS, 'Content-Type': 'application/json' },
+  });
+  if (!resp.ok) return jsonErr('创建登录会话失败');
+  const data = await resp.json();
+  const uuid = data.uuid;
+  const scanUrl = `https://www.okjike.com/account/scan?uuid=${uuid}`;
+  const qrUrl = `jike://page.jk/web?url=${encodeURIComponent(scanUrl)}&displayHeader=false&displayFooter=false`;
+  return jsonOk({ uuid, qrUrl });
+}
+
+async function handleAuthPoll(request) {
+  const url = new URL(request.url);
+  const uuid = url.searchParams.get('uuid');
+  if (!uuid) return jsonErr('缺少 uuid 参数');
+
+  const resp = await fetch(`${JIKE_API}/sessions.wait_for_confirmation?uuid=${uuid}`, {
+    headers: JIKE_HEADERS,
+  });
+
+  if (resp.status === 200) {
+    const body = await resp.json();
+    const access = body['x-jike-access-token'] || body.access_token;
+    const refresh = body['x-jike-refresh-token'] || body.refresh_token;
+    if (access && refresh) {
+      // Refresh to get proper tokens
+      try {
+        const refreshResp = await fetch(`${JIKE_API}/app_auth_tokens.refresh`, {
+          method: 'POST',
+          headers: { ...JIKE_HEADERS, 'x-jike-refresh-token': refresh },
+        });
+        if (refreshResp.ok) {
+          return jsonOk({
+            status: 'confirmed',
+            access_token: refreshResp.headers.get('x-jike-access-token') || access,
+            refresh_token: refreshResp.headers.get('x-jike-refresh-token') || refresh,
+          });
+        }
+      } catch {}
+      return jsonOk({ status: 'confirmed', access_token: access, refresh_token: refresh });
+    }
+    return jsonErr('扫码确认但未返回 Token');
+  }
+
+  if (resp.status === 400) {
+    return jsonOk({ status: 'waiting' });
+  }
+
+  return jsonOk({ status: 'waiting' });
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 async function handleSearch(request) {
-  const { keywords, criteria, pages = 2, access_token: at, anthropic_key: ak } = await request.json();
-  if (!at || !ak) return jsonErr('缺少 Access Token 或 Anthropic Key');
+  const { keywords, criteria, pages = 2, access_token: at, refresh_token: rt, gemini_key: ak } = await request.json();
+  if (!at || !ak) return jsonErr('缺少 Access Token 或 Gemini Key');
 
+  const ctx = { at, rt, refreshed: false };
   const kwList = keywords.split(',').map((k) => k.trim()).filter(Boolean);
   const allUsers = new Map();
 
   for (const kw of kwList) {
-    const posts = await searchKeyword(kw, at, pages);
+    const posts = await searchKeyword(kw, ctx, pages);
     for (const u of extractUsersFromPosts(posts)) {
       if (!allUsers.has(u.id)) allUsers.set(u.id, { ...u, foundVia: [kw] });
       else allUsers.get(u.id).foundVia.push(kw);
@@ -177,7 +254,7 @@ async function handleSearch(request) {
   const BATCH = 6;
   for (let i = 0; i < userList.length; i += BATCH) {
     const batch = userList.slice(i, i + BATCH);
-    const results = await Promise.all(batch.map((u) => fetchProfile(u.id, at)));
+    const results = await Promise.all(batch.map((u) => fetchProfile(u.id, ctx)));
     for (let j = 0; j < results.length; j++) {
       if (results[j]) {
         profiles.push({
@@ -199,7 +276,7 @@ async function handleSearch(request) {
     )
     .join('\n\n');
 
-  const resp = await claudeChat(
+  const resp = await geminiChat(
     ak,
     `以下是从即刻平台搜索到的用户列表，请根据筛选条件，从中选出最符合条件的用户，为每人写一句推荐理由（中文，20字以内）。
 
@@ -214,10 +291,19 @@ ${summary}
 只输出 JSON，不要任何其他文字。`
   );
 
-  const claudeData = await resp.json();
+  if (!resp.ok) {
+    let errMsg = 'Gemini API 调用失败: ' + resp.status;
+    try {
+      const errBody = await resp.json();
+      errMsg = errBody.error?.message || errMsg;
+    } catch {}
+    return jsonErr(errMsg);
+  }
+
+  const geminiData = await resp.json();
   let scored = [];
   try {
-    const text = claudeData.content[0].text.trim();
+    const text = geminiData.candidates[0].content.parts[0].text.trim();
     const start = text.indexOf('[');
     const end = text.lastIndexOf(']') + 1;
     const parsed = JSON.parse(text.slice(start, end));
@@ -228,25 +314,31 @@ ${summary}
     scored = profiles.slice(0, 20).map((p) => ({ ...p, reason: '符合搜索关键词' }));
   }
 
-  return jsonOk({ users: scored });
+  return jsonOk({ users: scored, ...(ctx.refreshed ? { newTokens: { access_token: ctx.at, refresh_token: ctx.rt } } : {}) });
 }
 
 async function handleAnalyze(request) {
-  const { input, question, limit = 50, access_token: at, anthropic_key: ak } = await request.json();
-  if (!at || !ak) return jsonErr('缺少 Access Token 或 Anthropic Key');
+  try {
+  const { input, question, limit = 50, access_token: at, refresh_token: rt, gemini_key: ak } = await request.json();
+  console.log('[analyze] start, input:', input, 'limit:', limit);
+  if (!at || !ak) return jsonErr('缺少 Access Token 或 Gemini Key');
 
+  const ctx = { at, rt, refreshed: false };
   let username = input.trim();
   const urlMatch = username.match(/\/u\/([^/?#\s]+)/);
   if (urlMatch) username = urlMatch[1];
+  console.log('[analyze] username:', username);
 
   const [profile, posts] = await Promise.all([
-    fetchProfile(username, at),
-    fetchPosts(username, at, limit),
+    fetchProfile(username, ctx),
+    fetchPosts(username, ctx, limit),
   ]);
+  console.log('[analyze] profile:', !!profile, 'posts:', posts.length);
 
   if (!profile) return jsonErr('用户不存在或无法访问', 404);
 
   const postsText = postsToText(posts);
+  console.log('[analyze] prompt length:', postsText.length);
   const prompt = `以下是即刻用户「${profile.screenName}」（@${profile.username}）的资料和帖子内容。
 
 **个人简介**：${profile.bio}
@@ -271,7 +363,18 @@ ${
 
 请用中文输出，结构清晰，使用 Markdown 格式（标题用 ##，重点用 **加粗**）。`;
 
-  const claudeResp = await claudeChat(ak, prompt, true);
+  console.log('[analyze] calling gemini streaming...');
+  const geminiResp = await geminiChat(ak, prompt, true);
+  console.log('[analyze] gemini status:', geminiResp.status);
+
+  if (!geminiResp.ok) {
+    let errMsg = 'Gemini API 调用失败: ' + geminiResp.status;
+    try {
+      const errBody = await geminiResp.json();
+      errMsg = errBody.error?.message || errMsg;
+    } catch {}
+    return jsonErr(errMsg);
+  }
 
   // SSE streaming response
   const { readable, writable } = new TransformStream();
@@ -280,25 +383,33 @@ ${
 
   const sse = (obj) => writer.write(enc.encode(`data: ${JSON.stringify(obj)}\n\n`));
 
-  // Send user info first
-  await sse({
-    type: 'user_info',
-    profile: {
-      screenName: profile.screenName,
-      username: profile.username,
-      bio: profile.bio,
-      profileUrl: profile.profileUrl,
-      followersCount: profile.followersCount,
-      postCount: posts.length,
-    },
-  });
-
-  // Pipe Claude stream
+  // All writes must happen AFTER return to avoid TransformStream deadlock.
+  // writer.write() blocks until readable is consumed, and readable is only
+  // consumed after it's returned as a Response body.
   (async () => {
-    const reader = claudeResp.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
     try {
+      // Send user info first
+      await sse({
+        type: 'user_info',
+        profile: {
+          screenName: profile.screenName,
+          username: profile.username,
+          bio: profile.bio,
+          profileUrl: profile.profileUrl,
+          followersCount: profile.followersCount,
+          postCount: posts.length,
+        },
+      });
+
+      // Send refreshed tokens if applicable
+      if (ctx.refreshed) {
+        await sse({ type: 'tokens_updated', access_token: ctx.at, refresh_token: ctx.rt });
+      }
+
+      // Pipe Gemini stream
+      const reader = geminiResp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -311,8 +422,9 @@ ${
           if (raw === '[DONE]') continue;
           try {
             const evt = JSON.parse(raw);
-            if (evt.type === 'content_block_delta' && evt.delta?.text) {
-              await sse({ type: 'text', text: evt.delta.text });
+            const text = evt.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              await sse({ type: 'text', text });
             }
           } catch {}
         }
@@ -330,6 +442,9 @@ ${
       'Access-Control-Allow-Origin': '*',
     },
   });
+  } catch (e) {
+    return jsonErr('分析请求失败: ' + (e.message || String(e)), 500);
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -357,6 +472,7 @@ const HTML = `<!DOCTYPE html>
 <title>即刻人才雷达</title>
 <script src="https://cdn.tailwindcss.com"><\/script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"><\/script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>
 <style>
 *{box-sizing:border-box}
@@ -404,14 +520,26 @@ tr:hover td{background:#fafafa}
       <input id="inp-rt" type="password" placeholder="eyJ..." class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-yellow-400">
     </div>
     <div>
-      <label class="text-xs text-gray-400 block mb-1.5">Anthropic API Key</label>
-      <input id="inp-ak" type="password" placeholder="sk-ant-..." class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-yellow-400">
+      <label class="text-xs text-gray-400 block mb-1.5">Gemini API Key</label>
+      <input id="inp-ak" type="password" placeholder="AI..." class="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-yellow-400">
     </div>
   </div>
   <div class="max-w-6xl mx-auto px-4 pb-4 flex items-center gap-3">
     <button id="cfg-save-btn" class="bg-yellow-400 hover:bg-yellow-300 text-black text-sm font-semibold px-5 py-1.5 rounded-lg transition-colors">保存到本地</button>
+    <button id="qr-login-btn" class="bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-5 py-1.5 rounded-lg transition-colors">扫码登录获取 Token</button>
     <span id="cfg-saved" class="text-green-400 text-sm hidden">✓ 已保存</span>
     <span class="text-gray-600 text-xs">Token 仅存储在浏览器 localStorage，不上传服务器</span>
+  </div>
+</div>
+
+<!-- QR Login Modal -->
+<div id="qr-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+  <div class="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full mx-4 text-center">
+    <h3 class="text-lg font-bold text-gray-900 mb-2">扫码登录即刻</h3>
+    <p class="text-sm text-gray-500 mb-4">用即刻 App 扫描下方二维码</p>
+    <div id="qr-container" class="flex justify-center mb-4"></div>
+    <p id="qr-status" class="text-sm text-gray-400 mb-4">等待扫码...</p>
+    <button id="qr-close-btn" class="text-sm text-gray-500 hover:text-gray-700 underline">取消</button>
   </div>
 </div>
 
@@ -442,7 +570,7 @@ tr:hover td{background:#fafafa}
         </div>
       </div>
       <div class="mb-4">
-        <label class="text-sm font-semibold text-gray-700 block mb-1.5">筛选条件 <span class="text-gray-400 font-normal text-xs">（Claude 根据此条件打分筛选）</span></label>
+        <label class="text-sm font-semibold text-gray-700 block mb-1.5">筛选条件 <span class="text-gray-400 font-normal text-xs">（AI 根据此条件打分筛选）</span></label>
         <textarea id="s-criteria" rows="3" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-400 resize-none transition-colors" placeholder="描述你想找的人...">技术型创业者：有技术深度（具体技术栈/开源项目/竞赛成绩），有产品执行力（已发布产品/真实用户数据/变现记录），顶校或大厂背景优先</textarea>
       </div>
       <button id="s-btn" class="bg-yellow-400 hover:bg-yellow-300 text-black font-semibold px-8 py-2.5 rounded-xl text-sm transition-colors flex items-center gap-2">
@@ -500,7 +628,7 @@ tr:hover td{background:#fafafa}
         </div>
       </div>
       <div class="mb-4">
-        <label class="text-sm font-semibold text-gray-700 block mb-1.5">分析维度 <span class="text-gray-400 font-normal text-xs">（留空则全维度分析）</span></label>
+        <label class="text-sm font-semibold text-gray-700 block mb-1.5">分析要求 <span class="text-gray-400 font-normal text-xs">（留空则全维度分析）</span></label>
         <textarea id="a-question" rows="2" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-400 resize-none transition-colors" placeholder="例：分析他的技术栈偏好和产品方向；或：找出他最有洞察力的3个观点并分析..."></textarea>
       </div>
       <button id="a-btn" class="bg-yellow-400 hover:bg-yellow-300 text-black font-semibold px-8 py-2.5 rounded-xl text-sm transition-colors">
@@ -560,17 +688,25 @@ function loadCfg() {
 function tokens() {
   return {
     access_token: localStorage.getItem('jike_at') || document.getElementById('inp-at').value,
-    anthropic_key: localStorage.getItem('jike_ak') || document.getElementById('inp-ak').value,
+    refresh_token: localStorage.getItem('jike_rt') || document.getElementById('inp-rt').value,
+    gemini_key: localStorage.getItem('jike_ak') || document.getElementById('inp-ak').value,
   };
 }
 function checkTokens() {
   const t = tokens();
-  if (!t.access_token || !t.anthropic_key) {
+  if (!t.access_token || !t.gemini_key) {
     document.getElementById('cfg').classList.remove('hidden');
-    alert('请先在设置中填写 Jike Access Token 和 Anthropic API Key');
+    alert('请先在设置中填写 Jike Access Token 和 Gemini API Key');
     return false;
   }
   return true;
+}
+function updateTokens(newTokens) {
+  if (!newTokens) return;
+  localStorage.setItem('jike_at', newTokens.access_token);
+  localStorage.setItem('jike_rt', newTokens.refresh_token);
+  document.getElementById('inp-at').value = newTokens.access_token;
+  document.getElementById('inp-rt').value = newTokens.refresh_token;
 }
 
 // ── Tabs ──
@@ -607,6 +743,7 @@ async function doSearch() {
     });
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
+    updateTokens(data.newTokens);
     searchData = data.users || [];
     renderTable(searchData);
   } catch (e) {
@@ -649,7 +786,7 @@ function exportCSV() {
     u.bio.split(',').join('，'), (u.reason||'').split(',').join('，'),
     u.contact||'', u.age||'', (u.foundVia||[]).join('|'),
   ]);
-  const csv = [hdr,...rows].map(r => r.map(c => '"'+String(c).split('"').join('""')+'"').join(',')).join('\n');
+  const csv = [hdr,...rows].map(r => r.map(c => '"'+String(c).split('"').join('""')+'"').join(',')).join('\\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'}));
   a.download = 'jike_users_' + new Date().toISOString().slice(0,10) + '.csv';
@@ -687,7 +824,12 @@ async function doAnalyze() {
         ...tokens(),
       }),
     });
-    if (!resp.ok) { const e = await resp.json(); throw new Error(e.error); }
+    if (!resp.ok) {
+      const txt = await resp.text();
+      let errMsg;
+      try { errMsg = JSON.parse(txt).error; } catch {}
+      throw new Error(errMsg || txt || '请求失败');
+    }
 
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
@@ -710,6 +852,8 @@ async function doAnalyze() {
             document.getElementById('a-bio').textContent = p.bio;
             document.getElementById('a-followers').textContent = p.followersCount + ' 粉丝';
             document.getElementById('a-posts-count').textContent = '分析 ' + p.postCount + ' 条帖子';
+          } else if (evt.type === 'tokens_updated') {
+            updateTokens({ access_token: evt.access_token, refresh_token: evt.refresh_token });
           } else if (evt.type === 'text') {
             mdBuffer += evt.text;
             document.getElementById('a-text').innerHTML = marked.parse(mdBuffer);
@@ -734,9 +878,62 @@ function esc(s) {
   return d.innerHTML;
 }
 
+// ── QR Login ──
+let qrPollTimer = null;
+async function startQrLogin() {
+  const modal = document.getElementById('qr-modal');
+  const status = document.getElementById('qr-status');
+  modal.classList.remove('hidden');
+  status.textContent = '正在创建会话...';
+
+  try {
+    const resp = await fetch('/api/auth/create', { method: 'POST' });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    // Generate QR code
+    const container = document.getElementById('qr-container');
+    container.innerHTML = '';
+    new QRCode(container, { text: data.qrUrl, width: 240, height: 240 });
+    status.textContent = '请用即刻 App 扫描二维码...';
+
+    // Poll for confirmation
+    let attempts = 0;
+    qrPollTimer = setInterval(async function() {
+      attempts++;
+      if (attempts > 90) {
+        clearInterval(qrPollTimer);
+        status.textContent = '扫码超时，请重试';
+        return;
+      }
+      try {
+        const pollResp = await fetch('/api/auth/poll?uuid=' + encodeURIComponent(data.uuid));
+        const pollData = await pollResp.json();
+        if (pollData.status === 'confirmed') {
+          clearInterval(qrPollTimer);
+          document.getElementById('inp-at').value = pollData.access_token;
+          document.getElementById('inp-rt').value = pollData.refresh_token;
+          localStorage.setItem('jike_at', pollData.access_token);
+          localStorage.setItem('jike_rt', pollData.refresh_token);
+          status.textContent = '登录成功！Token 已自动��入';
+          setTimeout(function() { modal.classList.add('hidden'); }, 1500);
+        }
+      } catch {}
+    }, 2000);
+  } catch (e) {
+    status.textContent = '创建会话失败：' + e.message;
+  }
+}
+function closeQrModal() {
+  if (qrPollTimer) clearInterval(qrPollTimer);
+  document.getElementById('qr-modal').classList.add('hidden');
+}
+
 loadCfg();
 document.getElementById('cfg-btn').addEventListener('click', toggleCfg);
 document.getElementById('cfg-save-btn').addEventListener('click', saveCfg);
+document.getElementById('qr-login-btn').addEventListener('click', startQrLogin);
+document.getElementById('qr-close-btn').addEventListener('click', closeQrModal);
 document.getElementById('tab-s').addEventListener('click', function() { tab('s'); });
 document.getElementById('tab-a').addEventListener('click', function() { tab('a'); });
 document.getElementById('s-btn').addEventListener('click', doSearch);
@@ -750,6 +947,7 @@ document.getElementById('a-btn').addEventListener('click', doAnalyze);
 
 export default {
   async fetch(request) {
+    try {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') {
@@ -760,6 +958,14 @@ export default {
           'Access-Control-Allow-Headers': 'Content-Type',
         },
       });
+    }
+
+    if (url.pathname === '/api/auth/create' && request.method === 'POST') {
+      return handleAuthCreate();
+    }
+
+    if (url.pathname === '/api/auth/poll') {
+      return handleAuthPoll(request);
     }
 
     if (url.pathname === '/api/search' && request.method === 'POST') {
@@ -773,5 +979,11 @@ export default {
     return new Response(HTML, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: 'Worker 内部错误: ' + (e.message || String(e)), stack: e.stack }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
   },
 };

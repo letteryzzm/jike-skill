@@ -91,19 +91,26 @@ cd web && npx wrangler deploy
 
 **Tab 1 — 人才搜索**
 - 输入关键词（逗号分隔）+ 自然语言筛选条件
-- Worker 搜索 Jike → 去重 → 批量拉 profile → 调 Claude 按条件评分筛选
+- Worker 搜索 Jike → 去重 → 批量拉 profile → 调 Gemini 按条件评分筛选
 - 结果以大表展示：显示名、主页链接、Bio 摘要、推荐理由、联系方式（有则显示）、年龄（有则显示）、来源关键词
 - 支持导出 CSV
 
 **Tab 2 — 用户分析**
 - 输入即刻用户链接（`https://web.okjike.com/u/xxx`）或用户名
-- 抓取该用户全部（或指定数量）帖子，调 Claude 做多维度分析
+- 抓取该用户全部（或指定数量）帖子，调 Gemini 做多维度分析
 - 分析维度可自定义，留空则默认：兴趣领域、内容风格、技术/产品深度、代表性观点、整体画像
 - 结果流式输出，Markdown 渲染
 
 **通用设置**
-- Jike Access Token、Refresh Token、Anthropic API Key 存 localStorage，刷新后自动恢复
+- Jike Access Token、Refresh Token、Gemini API Key 存 localStorage，刷新后自动恢复
 - Token 仅在客户端存储，每次请求随 body 发给 Worker，Worker 不持久化
+- 支持扫码登录：点击「扫码登录获取 Token」按钮，用即刻 App 扫描 QR 码，自动获取并填入 Token
+
+**AI 供应商**
+- 使用 Google Gemini API（模型：`gemini-3-flash-preview`）
+- 非流式调用（人才搜索评分）：`generateContent` 端点
+- 流式调用（用户分析）：`streamGenerateContent?alt=sse` 端点
+- API Key 以 query 参数传递：`?key=API_KEY`
 
 ### 已知坑
 
